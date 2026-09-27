@@ -1,0 +1,23 @@
+# AI proxy for the markdown website builder.
+# Deploy from this directory: npx wrangler deploy
+# The script name becomes the workers.dev subdomain prefix: <name>.<account>.workers.dev
+name = "markdown-website-builder-ai"
+main = "src/index.ts"
+compatibility_date = "2026-09-27"
+
+# Change OPENAI_MODEL to another Chat Completions model that supports
+# json_schema response formats, then redeploy. gpt-4o-mini is the cheap default.
+# Examples: gpt-4o-mini, gpt-4o
+[vars]
+OPENAI_MODEL = "gpt-4o-mini"
+
+# Optional. Comma-separated browser Origins. If you set this, it replaces the
+# defaults (GitHub Pages + local Vite). Include every origin you actually use.
+# ALLOWED_ORIGINS = "https://maysentg.github.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+
+# Optional. Another API root, without a trailing path. Default is OpenAI.
+# OPENAI_BASE_URL = "https://api.openai.com/v1"
+
+# Secrets — set with Wrangler, never commit them:
+#   npx wrangler secret put OPENAI_API_KEY
+#   npx wrangler secret put GATE_TOKEN          # optional

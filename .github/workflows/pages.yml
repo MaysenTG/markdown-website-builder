@@ -33,7 +33,15 @@ jobs:
           enablement: true
       - name: Install dependencies
         run: npm ci
+      - name: Test
+        run: npm test
       - name: Build
+        env:
+          # Repository variable (Settings → Secrets and variables → Actions → Variables).
+          # Empty leaves AI editing off. Changing it requires a new Pages build.
+          # Optional VITE_AI_GATE_TOKEN is also a variable; it is inlined into the JS bundle.
+          VITE_AI_PROXY_URL: ${{ vars.VITE_AI_PROXY_URL }}
+          VITE_AI_GATE_TOKEN: ${{ vars.VITE_AI_GATE_TOKEN }}
         run: npm run build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
