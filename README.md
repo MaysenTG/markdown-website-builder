@@ -1,12 +1,14 @@
-# md-url-pages
+# Markdown website builder
 
 Frontend-only pages rendered from markdown (plus optional YAML frontmatter) stored in the URL. No backend, no accounts — share a link and the page appears with your chosen layout and styling.
 
+Repository: [MaysenTG/markdown-website-builder](https://github.com/MaysenTG/markdown-website-builder)
+
 ## Live site
 
-https://maysentg.github.io/md-url-pages/
+https://maysentg.github.io/markdown-website-builder/
 
-The app is built with Vite `base: /md-url-pages/` for this GitHub Pages project site. Share links and hash payloads (`#p=…`) use that path on production; local dev uses the same base, so open `http://localhost:5173/md-url-pages/` after `npm run dev`.
+The app is built with Vite `base: /markdown-website-builder/` for this GitHub Pages project site. Share links and hash payloads (`#p=…`) use that path on production; local dev uses the same base, so open `http://localhost:5173/markdown-website-builder/` after `npm run dev`.
 
 ## Run locally
 
@@ -35,7 +37,7 @@ With no valid payload, `/` shows a short landing page with links to the editor a
 
 1. The document is plain text: optional YAML frontmatter between `---` lines, then markdown body.
 2. The full string is compressed with [lz-string](https://github.com/pieroxy/lz-string) (`compressToEncodedURIComponent`).
-3. The result is placed in the **hash** (preferred): `https://maysentg.github.io/md-url-pages/#p=<compressed>`  
+3. The result is placed in the **hash** (preferred): `https://maysentg.github.io/markdown-website-builder/#p=<compressed>`  
    Query params also work: `?p=<compressed>` or `?d=<compressed>`.
 
 Hash links stay on the client (no server round-trip) and avoid leaking long payloads in referrer headers as often as query strings.

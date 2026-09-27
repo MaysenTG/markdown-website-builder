@@ -63,7 +63,7 @@ export function Editor() {
     <div className="editor">
       <header className="editor__bar">
         <Link to="/" className="editor__brand">
-          md-url-pages
+          Markdown website builder
         </Link>
         <div className="editor__bar-actions">
           <button type="button" className="editor__btn" onClick={copyLink}>

@@ -1,6 +1,7 @@
 {
-  "name": "md-url-pages",
+  "name": "markdown-website-builder",
   "private": true,
+  "homepage": "https://maysentg.github.io/markdown-website-builder/",
   "version": "0.0.0",
   "type": "module",
   "scripts": {

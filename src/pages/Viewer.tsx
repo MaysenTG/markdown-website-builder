@@ -11,7 +11,7 @@ export function Viewer() {
   const parsed = useMemo(() => (payload ? parsePageSource(payload) : null), [payload])
 
   useEffect(() => {
-    document.title = parsed?.frontmatter.title ?? 'md-url-pages'
+    document.title = parsed?.frontmatter.title ?? 'Markdown website builder'
   }, [parsed?.frontmatter.title])
 
   if (!parsed) {

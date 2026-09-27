@@ -10,7 +10,7 @@ export function Landing() {
     <div className="landing-page">
       <main className="landing">
         <div className="landing__card">
-          <p className="landing__eyebrow">md-url-pages</p>
+          <p className="landing__eyebrow">Markdown website builder</p>
           <h1>Pages that live in the link</h1>
           <p className="landing__lead">
             Write markdown plus optional YAML frontmatter. The compressed payload sits in the URL hash —
