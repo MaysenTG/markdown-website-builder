@@ -1,0 +1,128 @@
+.page-view {
+  min-height: 100vh;
+  background: var(--page-bg, var(--surface-bg));
+  color: var(--surface-text);
+  font-family: var(--page-font);
+}
+
+.page-view.theme-light {
+  --surface-bg: #faf9f7;
+  --surface-text: #1a1a1a;
+  --surface-muted: #5c5c5c;
+  --surface-border: #e4e2de;
+  --link: var(--page-accent, #2563eb);
+}
+
+.page-view.theme-dark {
+  --surface-bg: #12141a;
+  --surface-text: #e8e6e3;
+  --surface-muted: #9a9690;
+  --surface-border: #2a2d36;
+  --link: var(--page-accent, #8ab4ff);
+}
+
+.page-view.theme-auto {
+  --surface-bg: #faf9f7;
+  --surface-text: #1a1a1a;
+  --surface-muted: #5c5c5c;
+  --surface-border: #e4e2de;
+  --link: var(--page-accent, #2563eb);
+}
+
+@media (prefers-color-scheme: dark) {
+  .page-view.theme-auto {
+    --surface-bg: #12141a;
+    --surface-text: #e8e6e3;
+    --surface-muted: #9a9690;
+    --surface-border: #2a2d36;
+    --link: var(--page-accent, #8ab4ff);
+  }
+}
+
+.page-view__chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--surface-border);
+  font-size: 0.875rem;
+}
+
+.page-view__title {
+  font-weight: 600;
+  color: var(--surface-muted);
+}
+
+.page-view__edit-link {
+  color: var(--link);
+  text-decoration: none;
+}
+
+.page-view__edit-link:hover {
+  text-decoration: underline;
+}
+
+.page-view__article {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+  line-height: 1.65;
+}
+
+.page-view__sr-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.page-body :is(h1, h2, h3) {
+  line-height: 1.25;
+  margin-top: 1.75em;
+  margin-bottom: 0.5em;
+}
+
+.page-body h1 {
+  margin-top: 0;
+  font-size: 2rem;
+}
+
+.page-body a {
+  color: var(--link);
+}
+
+.page-body blockquote {
+  margin: 1.25em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--link);
+  color: var(--surface-muted);
+}
+
+.page-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.page-body code {
+  font-size: 0.9em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-text) 8%, transparent);
+}
+
+.page-body pre code {
+  display: block;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.page-view[data-hide-chrome='true'] .page-view__article {
+  padding-top: 2.5rem;
+}
