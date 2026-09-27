@@ -1,0 +1,73 @@
+# Builds the Vite app and publishes dist/ to Cloudflare Pages.
+# Skips the deploy step when Cloudflare credentials are absent (the build still runs).
+# Do not also connect this repo in the Pages dashboard Git integration, or each push deploys twice.
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        env:
+          # Repository variables (Settings → Secrets and variables → Actions → Variables).
+          # Empty leaves AI editing off. Changing either value requires a new Pages build.
+          # VITE_AI_GATE_TOKEN is inlined into the public JavaScript bundle.
+          VITE_AI_PROXY_URL: ${{ vars.VITE_AI_PROXY_URL }}
+          VITE_AI_GATE_TOKEN: ${{ vars.VITE_AI_GATE_TOKEN }}
+        run: npm run build
+
+      - name: Check Cloudflare credentials
+        id: creds
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is unset; skipping Pages deploy."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pages project name
+        id: project
+        if: steps.creds.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+        run: echo "name=${CLOUDFLARE_PAGES_PROJECT:-markdown-website-builder}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.creds.outputs.skip != 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ steps.project.outputs.name }}
+          packageManager: npm

@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { AiPreviewStage } from '../components/ai/AiPreviewStage'
 import { PageView } from '../components/PageView'
+import { aiEditingEnabled } from '../lib/ai/config'
 import { buildShareUrl, encodePagePayload, readPayloadFromLocation } from '../lib/encode'
 import { DEFAULT_EDITOR_DRAFT } from '../lib/examples'
 import { parsePageSource, updateFrontmatter } from '../lib/parsePage'
 import type { PageTheme } from '../lib/types'
 import './Editor.css'
+
+type ToastKind = 'info' | 'success' | 'error'
 
 const STORAGE_KEY = 'md-url-pages-draft'
 
@@ -22,9 +26,27 @@ function loadDraft(): string {
   return DEFAULT_EDITOR_DRAFT
 }
 
+function CrosshairIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="2.25" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M7 1.15v2.15M7 10.7v2.15M1.15 7h2.15M10.7 7h2.15"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 export function Editor() {
   const [source, setSource] = useState(loadDraft)
   const [copyStatus, setCopyStatus] = useState<string | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [toast, setToast] = useState<{ id: number; kind: ToastKind; text: string } | null>(null)
+  const toastId = useRef(0)
+  const aiEnabled = aiEditingEnabled()
 
   const parsed = useMemo(() => parsePageSource(source), [source])
   const { frontmatter } = parsed
@@ -41,6 +63,32 @@ export function Editor() {
     () => buildShareUrl(encodePagePayload(source)),
     [source],
   )
+
+  const showToast = useCallback((kind: ToastKind, text: string) => {
+    toastId.current += 1
+    setToast({ id: toastId.current, kind, text })
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => {
+      setToast((current) => (current?.id === toast.id ? null : current))
+    }, 4200)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
+  const exitSelectMode = useCallback(() => setSelectMode(false), [])
+
+  const toggleSelect = () => {
+    if (!aiEnabled) {
+      showToast(
+        'info',
+        'AI editing is off. Set VITE_AI_PROXY_URL and deploy the Cloudflare Worker — see the README.',
+      )
+      return
+    }
+    setSelectMode((on) => !on)
+  }
 
   const patchFrontmatter = useCallback(
     (patch: Parameters<typeof updateFrontmatter>[1]) => {
@@ -66,6 +114,21 @@ export function Editor() {
           Markdown website builder
         </Link>
         <div className="editor__bar-actions">
+          <button
+            type="button"
+            className="editor__btn editor__btn--select"
+            aria-pressed={selectMode}
+            aria-disabled={!aiEnabled}
+            title={
+              aiEnabled
+                ? 'Select an element in the preview to edit it with AI'
+                : 'AI editing is not configured. See the README.'
+            }
+            onClick={toggleSelect}
+          >
+            <CrosshairIcon />
+            {selectMode ? 'Selecting' : 'Select'}
+          </button>
           <button type="button" className="editor__btn" onClick={copyLink}>
             {copyStatus ?? 'Copy share link'}
           </button>
@@ -173,17 +236,41 @@ export function Editor() {
         </section>
 
         <section className="editor__panel editor__panel--preview">
-          <p className="editor__preview-label">Live preview</p>
-          <div className="editor__preview-frame">
+          <div className="editor__preview-head">
+            <p className="editor__preview-label">Live preview</p>
+            {selectMode ? (
+              <p className="editor__select-hint">
+                <span className="editor__select-hint-dot" aria-hidden="true" />
+                Click an element · Esc exits
+              </p>
+            ) : null}
+          </div>
+          <AiPreviewStage
+            source={source}
+            selectMode={selectMode && aiEnabled}
+            onApply={setSource}
+            onExitSelectMode={exitSelectMode}
+            onNotify={showToast}
+          >
             <PageView
               frontmatter={parsed.frontmatter}
               body={parsed.body}
               showChrome={false}
               showFooter={false}
             />
-          </div>
+          </AiPreviewStage>
         </section>
       </div>
+      {toast ? (
+        <button
+          type="button"
+          className={`ai-toast ai-toast--${toast.kind}`}
+          role="status"
+          onClick={() => setToast(null)}
+        >
+          {toast.text}
+        </button>
+      ) : null}
     </div>
   )
 }

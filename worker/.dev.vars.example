@@ -1,0 +1,6 @@
+# Copy to worker/.dev.vars for `npx wrangler dev`. Never commit .dev.vars.
+OPENAI_API_KEY=sk-replace-me
+
+# Optional. If set, the browser must send the same value in X-AI-Gate
+# (VITE_AI_GATE_TOKEN at build time).
+# GATE_TOKEN=replace-me
