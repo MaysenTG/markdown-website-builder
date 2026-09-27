@@ -191,7 +191,7 @@ Use one deploy path, not both.
 | `CLOUDFLARE_API_TOKEN` | API token with **Account → Cloudflare Pages → Edit**. Add **Account → Workers Scripts → Edit** on the same token if this workflow and `worker.yml` share it. |
 | `CLOUDFLARE_ACCOUNT_ID` | Account ID from the Cloudflare dashboard overview. |
 
-Optional Actions **variable** `CLOUDFLARE_PAGES_PROJECT` (default `markdown-website-builder`) is the Pages project name and the `*.pages.dev` subdomain. `wrangler pages deploy` creates the project on first deploy if your token can. Until the secrets exist, the workflow builds and then skips deploy.
+Optional Actions **variable** `CLOUDFLARE_PAGES_PROJECT` (default `markdown-website-builder`) is the Pages project name and the `*.pages.dev` subdomain. The workflow runs `wrangler pages project create` before deploy so the first push can create the project (later runs ignore “already exists”). Until the secrets exist, the workflow builds and then skips deploy.
 
 **Dashboard Git connection (instead of the workflow).** In the Cloudflare dashboard: Workers & Pages → Create → Pages → Connect to Git → this repository. Build command `npm run build`, build output directory `dist`. Set `VITE_AI_PROXY_URL` and, if you use a gate, `VITE_AI_GATE_TOKEN` as Pages environment variables. Do not also leave the Actions deploy running.
 
