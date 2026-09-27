@@ -195,6 +195,34 @@
   flex-direction: column;
   gap: 0.45rem;
   padding: 0.15rem 0.7rem 0.7rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(165, 180, 252, 0.45) transparent;
+}
+
+.ai-chat__messages::-webkit-scrollbar,
+.ai-chat__input::-webkit-scrollbar {
+  width: 10px;
+}
+
+.ai-chat__messages::-webkit-scrollbar-track,
+.ai-chat__input::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 6px;
+}
+
+.ai-chat__messages::-webkit-scrollbar-thumb,
+.ai-chat__input::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.38);
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background-clip: padding-box;
+}
+
+.ai-chat__messages::-webkit-scrollbar-thumb:hover,
+.ai-chat__input::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(199, 210, 254, 0.85);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .ai-chat__empty,
@@ -289,6 +317,8 @@
   min-height: 2.7rem;
   max-height: 6.5rem;
   resize: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(165, 180, 252, 0.45) transparent;
   border-radius: 8px;
   border: 1px solid #334155;
   background: #020617;
