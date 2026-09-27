@@ -82,7 +82,7 @@ The viewer always shows a small site footer (About, Editor, GitHub). There is no
 
 ## AI editing
 
-On `/edit`, **Select** turns on a DevTools style picker over the live preview. Hover outlines an element; click opens a small chat next to it. The assistant rewrites the page’s markdown and YAML frontmatter (the same source the editor already stores), and the preview updates. The draft still goes to localStorage. Escape leaves select mode.
+On `/edit`, **Select** turns on a DevTools-style picker over the live preview. Hover outlines an element; click opens a small chat next to it. The assistant rewrites the page’s markdown and YAML frontmatter (the same source the editor already stores), and the preview updates. The draft still goes to localStorage. Escape leaves select mode.
 
 If `VITE_AI_PROXY_URL` is empty, Select stays in the toolbar but does not call anything. Clicking it explains that AI is off and points here. The rest of the editor works as before.
 
