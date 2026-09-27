@@ -68,7 +68,9 @@ Your **markdown** here.
 | `background` | Page background (color, gradient, etc.) |
 | `accent` | Link and accent color |
 | `hideChrome` | Hide the small viewer header |
-| `css` | Extra CSS injected into the page (targets `.page-body`, etc.) |
+| `css` | Extra CSS injected into the page (targets `.page-body`, `.viewer-site-footer`, etc.) |
+
+The viewer always shows a small site footer (About, Editor, GitHub). There is no toggle in the editor; to hide it on a shared page, use frontmatter `css`, e.g. `.viewer-site-footer { display: none; }`.
 
 ## Security
 

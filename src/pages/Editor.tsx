@@ -179,6 +179,7 @@ export function Editor() {
               frontmatter={parsed.frontmatter}
               body={parsed.body}
               showChrome={false}
+              showFooter={false}
             />
           </div>
         </section>

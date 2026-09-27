@@ -2,12 +2,15 @@ import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { PageFrontmatter } from '../lib/types'
 import { renderMarkdownToHtml } from '../lib/renderMarkdown'
+import { ViewerSiteFooter } from './ViewerSiteFooter'
 import './PageView.css'
 
 interface PageViewProps {
   frontmatter: PageFrontmatter
   body: string
   showChrome?: boolean
+  /** Viewer footer; off in the editor live preview. */
+  showFooter?: boolean
 }
 
 function themeClass(theme: PageFrontmatter['theme']): string {
@@ -16,7 +19,7 @@ function themeClass(theme: PageFrontmatter['theme']): string {
   return 'theme-auto'
 }
 
-export function PageView({ frontmatter, body, showChrome = true }: PageViewProps) {
+export function PageView({ frontmatter, body, showChrome = true, showFooter = true }: PageViewProps) {
   const location = useLocation()
   const html = useMemo(() => renderMarkdownToHtml(body), [body])
   const hideChrome = frontmatter.hideChrome === true
@@ -51,6 +54,7 @@ export function PageView({ frontmatter, body, showChrome = true }: PageViewProps
         )}
         <div className="page-body" dangerouslySetInnerHTML={{ __html: html }} />
       </article>
+      {showFooter ? <ViewerSiteFooter /> : null}
       {frontmatter.css ? (
         <style>{frontmatter.css}</style>
       ) : null}
