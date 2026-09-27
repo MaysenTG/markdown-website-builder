@@ -15,12 +15,20 @@ import {
   pickSelectable,
 } from '../../lib/ai/describeSelection'
 import { placePanel, type Box } from '../../lib/ai/placePanel'
-import { AiEditError, nextSourceFromAiResponse } from '../../lib/ai/protocol'
+import {
+  previewDocument,
+  sendBlockedByProposal,
+  sourceAfterAccept,
+  sourceAfterReject,
+  stageAiResponse,
+  type PendingProposal,
+} from '../../lib/ai/proposal'
+import { AiEditError } from '../../lib/ai/protocol'
 import type { AiChatMessage, ElementSelection } from '../../lib/ai/types'
 import { AiChatPanel } from './AiChatPanel'
 import './AiPreviewStage.css'
 
-type Phase = 'idle' | 'thinking' | 'applying' | 'error'
+type Phase = 'idle' | 'thinking' | 'applying' | 'pending' | 'error'
 type ToastKind = 'info' | 'success' | 'error'
 
 interface Session {
@@ -39,16 +47,28 @@ interface AiPreviewStageProps {
   source: string
   selectMode: boolean
   onApply: (next: string) => void
+  onPreview: (next: string | null) => void
   onExitSelectMode: () => void
   onNotify: (kind: ToastKind, text: string) => void
   children: ReactNode
 }
 
-function OverlayBox({ box, tag, selected }: { box: Box; tag: string; selected?: boolean }) {
+function OverlayBox({
+  box,
+  tag,
+  selected,
+  pending,
+}: {
+  box: Box
+  tag: string
+  selected?: boolean
+  pending?: boolean
+}) {
   const tagInside = box.top < 18
+  const tone = pending ? 'ai-box--pending' : selected ? 'ai-box--selected' : 'ai-box--hover'
   return (
     <div
-      className={`ai-box ${selected ? 'ai-box--selected' : 'ai-box--hover'} ${tagInside ? 'ai-box--tag-inside' : ''}`}
+      className={`ai-box ${tone} ${tagInside ? 'ai-box--tag-inside' : ''}`}
       style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
       aria-hidden="true"
     >
@@ -61,6 +81,7 @@ export function AiPreviewStage({
   source,
   selectMode,
   onApply,
+  onPreview,
   onExitSelectMode,
   onNotify,
   children,
@@ -72,11 +93,18 @@ export function AiPreviewStage({
   const hoverElRef = useRef<HTMLElement | null>(null)
   const sessionRef = useRef<Session | null>(null)
   const sourceRef = useRef(source)
+  const pendingRef = useRef<PendingProposal | null>(null)
+  const onPreviewRef = useRef(onPreview)
+  const onApplyRef = useRef(onApply)
+  const onNotifyRef = useRef(onNotify)
+  const acceptRef = useRef<() => void>(() => {})
+  const rejectRef = useRef<() => void>(() => {})
   const requestGen = useRef(0)
   const busyRef = useRef(false)
   const phaseTimer = useRef<number | null>(null)
 
   const [session, setSession] = useState<Session | null>(null)
+  const [pending, setPending] = useState<PendingProposal | null>(null)
   const [hover, setHover] = useState<HoverState | null>(null)
   const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null)
   const [selectBox, setSelectBox] = useState<Box | null>(null)
@@ -86,12 +114,14 @@ export function AiPreviewStage({
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [flash, setFlash] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
   const [seenSelectMode, setSeenSelectMode] = useState(selectMode)
 
   if (selectMode !== seenSelectMode) {
     setSeenSelectMode(selectMode)
     if (!selectMode) {
       setSession(null)
+      setPending(null)
       setHover(null)
       setSelectedEl(null)
       setSelectBox(null)
@@ -99,6 +129,7 @@ export function AiPreviewStage({
       setError(null)
       setDraft('')
       setFlash(false)
+      setRejecting(false)
     }
   }
 
@@ -125,25 +156,55 @@ export function AiPreviewStage({
   useEffect(() => {
     sessionRef.current = session
     sourceRef.current = source
+    pendingRef.current = pending
     selectedElRef.current = selectedEl
     hoverElRef.current = hover?.el ?? null
-  }, [session, source, selectedEl, hover])
+    onPreviewRef.current = onPreview
+    onApplyRef.current = onApply
+    onNotifyRef.current = onNotify
+  }, [session, source, pending, selectedEl, hover, onPreview, onApply, onNotify])
 
   useEffect(() => {
     if (selectMode) return
     requestGen.current += 1
     busyRef.current = false
+    pendingRef.current = null
     clearPhaseTimer()
     selectedElRef.current = null
     hoverElRef.current = null
+    onPreviewRef.current(null)
   }, [selectMode, clearPhaseTimer])
+
+  useEffect(() => {
+    const current = pendingRef.current
+    if (!current || source === current.base) return
+    pendingRef.current = null
+    setPending(null)
+    setPhase('idle')
+    onPreviewRef.current(null)
+    onNotifyRef.current('info', 'Discarded the AI preview because the page source changed.')
+  }, [source])
 
   useEffect(() => {
     if (!selectMode) return
     const onKey = (event: KeyboardEvent) => {
+      const acceptKey = (event.metaKey || event.ctrlKey) && event.key === 'Enter'
+      if (acceptKey) {
+        if (!pendingRef.current || busyRef.current) return
+        event.preventDefault()
+        event.stopPropagation()
+        acceptRef.current()
+        return
+      }
       if (event.key !== 'Escape') return
       event.preventDefault()
       event.stopPropagation()
+      if (pendingRef.current) {
+        rejectRef.current()
+        return
+      }
+      requestGen.current += 1
+      busyRef.current = false
       onExitSelectMode()
     }
     window.addEventListener('keydown', onKey, true)
@@ -206,7 +267,7 @@ export function AiPreviewStage({
         existing.selection.label === next.label
       return same ? existing : { ...existing, selection: next }
     })
-  }, [source, selectMode, session?.id, measure])
+  }, [source, selectMode, session?.id, measure, pending])
 
   useLayoutEffect(() => {
     const shell = shellRef.current
@@ -222,8 +283,74 @@ export function AiPreviewStage({
     setPanelPos((prev) => (prev.top === next.top && prev.left === next.left ? prev : next))
   }, [selectBox, session, phase, error, panelMax])
 
-  const closePanel = () => {
+  const rememberProposal = (next: PendingProposal | null) => {
+    pendingRef.current = next
+    setPending(next)
+  }
+
+  const showPreview = (next: string | null) => {
+    onPreviewRef.current(next)
+  }
+
+  const playReject = () => {
     clearPhaseTimer()
+    setRejecting(true)
+    setFlash(false)
+    phaseTimer.current = window.setTimeout(() => {
+      setRejecting(false)
+      phaseTimer.current = null
+    }, 420)
+  }
+
+  const accept = () => {
+    const current = pendingRef.current
+    if (!current || busyRef.current) return
+    const committed = sourceRef.current
+    const next = sourceAfterAccept(committed, current)
+    rememberProposal(null)
+    showPreview(null)
+    setPhase('idle')
+    setError(null)
+    if (next === current.proposed && committed === current.base) {
+      onApplyRef.current(next)
+      onNotifyRef.current('success', 'Change kept')
+      clearPhaseTimer()
+      setFlash(true)
+      setRejecting(false)
+      phaseTimer.current = window.setTimeout(() => {
+        setFlash(false)
+        phaseTimer.current = null
+      }, 900)
+      return
+    }
+    onNotifyRef.current('info', 'The page changed, so that preview was not kept.')
+  }
+
+  const reject = () => {
+    const current = pendingRef.current
+    if (!current || busyRef.current) return
+    const restored = sourceAfterReject(sourceRef.current, current)
+    rememberProposal(null)
+    showPreview(null)
+    if (sourceRef.current !== restored) onApplyRef.current(restored)
+    setPhase('idle')
+    setError(null)
+    playReject()
+    onNotifyRef.current('info', 'Change discarded')
+  }
+
+  useEffect(() => {
+    acceptRef.current = accept
+    rejectRef.current = reject
+  })
+
+  const closePanel = () => {
+    requestGen.current += 1
+    busyRef.current = false
+    const hadPending = pendingRef.current !== null
+    if (hadPending) reject()
+    clearPhaseTimer()
+    setRejecting(false)
     setSession(null)
     setSelectBox(null)
     setSelectedEl(null)
@@ -274,7 +401,9 @@ export function AiPreviewStage({
     if (!same) {
       requestGen.current += 1
       busyRef.current = false
+      if (pendingRef.current) reject()
       clearPhaseTimer()
+      setRejecting(false)
       setPhase('idle')
       setError(null)
       setDraft('')
@@ -304,7 +433,7 @@ export function AiPreviewStage({
 
   const send = async () => {
     const current = sessionRef.current
-    if (!current || busyRef.current) return
+    if (!current || busyRef.current || sendBlockedByProposal(pendingRef.current)) return
     const instruction = draft.trim()
     if (!instruction) return
 
@@ -335,17 +464,16 @@ export function AiPreviewStage({
         return
       }
 
-      const applied = nextSourceFromAiResponse(sourceAtSend, response)
-      if (!applied.ok) {
+      const staged = stageAiResponse(sourceAtSend, response)
+      if (staged.status === 'invalid') {
         setSession((existing) => (existing && existing.id === sessionId ? { ...existing, messages: history } : existing))
         setDraft((existing) => (existing.trim() ? existing : instruction))
         setPhase('error')
-        setError(applied.error)
-        onNotify('error', applied.error)
+        setError(staged.error)
+        onNotify('error', staged.error)
         return
       }
 
-      if (applied.changed) onApply(applied.source)
       setSession((existing) => {
         if (!existing || existing.id !== sessionId) return existing
         return {
@@ -353,11 +481,18 @@ export function AiPreviewStage({
           messages: [...optimistic, { role: 'assistant', content: response.message }],
         }
       })
-      setPhase('applying')
-      setFlash(true)
-      if (applied.changed) onNotify('success', 'Preview updated')
-      phaseTimer.current = window.setTimeout(() => {
+
+      if (staged.status === 'unchanged') {
         setPhase('idle')
+        return
+      }
+
+      rememberProposal(staged.proposal)
+      showPreview(previewDocument(sourceAtSend, staged.proposal))
+      setPhase('pending')
+      setRejecting(false)
+      setFlash(true)
+      phaseTimer.current = window.setTimeout(() => {
         setFlash(false)
         phaseTimer.current = null
       }, 900)
@@ -376,9 +511,10 @@ export function AiPreviewStage({
 
   return (
     <div
-      className={`ai-stage ${flash ? 'ai-stage--flash' : ''}`}
+      className={`ai-stage ${flash ? 'ai-stage--flash' : ''} ${pending ? 'ai-stage--pending' : ''} ${rejecting ? 'ai-stage--reject' : ''}`}
       ref={shellRef}
       data-selecting={selectMode ? 'true' : 'false'}
+      data-proposal={pending ? 'pending' : 'none'}
     >
       <div
         className="ai-stage__scroll"
@@ -396,7 +532,9 @@ export function AiPreviewStage({
           {hover && hover.el !== selectedEl ? (
             <OverlayBox box={hover.box} tag={hover.tag} />
           ) : null}
-          {session && selectBox ? <OverlayBox box={selectBox} tag={session.selection.tag} selected /> : null}
+          {session && selectBox ? (
+            <OverlayBox box={selectBox} tag={session.selection.tag} selected pending={pending !== null} />
+          ) : null}
           {session && selectBox ? (
             <div
               ref={panelRef}
@@ -414,12 +552,15 @@ export function AiPreviewStage({
                 sessionId={session.id}
                 messages={session.messages}
                 phase={phase}
+                pending={pending !== null}
                 error={error}
                 draft={draft}
                 onDraft={setDraft}
                 onSend={() => {
                   void send()
                 }}
+                onAccept={accept}
+                onReject={reject}
                 onClose={closePanel}
               />
             </div>

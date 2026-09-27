@@ -42,6 +42,7 @@ function CrosshairIcon() {
 
 export function Editor() {
   const [source, setSource] = useState(loadDraft)
+  const [previewSource, setPreviewSource] = useState<string | null>(null)
   const [copyStatus, setCopyStatus] = useState<string | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [toast, setToast] = useState<{ id: number; kind: ToastKind; text: string } | null>(null)
@@ -49,6 +50,10 @@ export function Editor() {
   const aiEnabled = aiEditingEnabled()
 
   const parsed = useMemo(() => parsePageSource(source), [source])
+  const previewParsed = useMemo(
+    () => parsePageSource(previewSource ?? source),
+    [previewSource, source],
+  )
   const { frontmatter } = parsed
 
   useEffect(() => {
@@ -90,8 +95,14 @@ export function Editor() {
     setSelectMode((on) => !on)
   }
 
+  const editSource = useCallback((next: string) => {
+    setPreviewSource(null)
+    setSource(next)
+  }, [])
+
   const patchFrontmatter = useCallback(
     (patch: Parameters<typeof updateFrontmatter>[1]) => {
+      setPreviewSource(null)
       setSource((prev) => updateFrontmatter(prev, patch))
     },
     [],
@@ -229,16 +240,23 @@ export function Editor() {
             <textarea
               className="editor__markdown"
               value={source}
-              onChange={(e) => setSource(e.target.value)}
+              onChange={(e) => editSource(e.target.value)}
               spellCheck={false}
             />
           </label>
         </section>
 
-        <section className="editor__panel editor__panel--preview">
+        <section
+          className={`editor__panel editor__panel--preview${previewSource ? ' is-ai-pending' : ''}`}
+        >
           <div className="editor__preview-head">
             <p className="editor__preview-label">Live preview</p>
-            {selectMode ? (
+            {previewSource ? (
+              <p className="editor__select-hint editor__select-hint--pending">
+                <span className="editor__select-hint-dot" aria-hidden="true" />
+                AI preview · Escape discards
+              </p>
+            ) : selectMode ? (
               <p className="editor__select-hint">
                 <span className="editor__select-hint-dot" aria-hidden="true" />
                 Click an element · Esc exits
@@ -249,12 +267,13 @@ export function Editor() {
             source={source}
             selectMode={selectMode && aiEnabled}
             onApply={setSource}
+            onPreview={setPreviewSource}
             onExitSelectMode={exitSelectMode}
             onNotify={showToast}
           >
             <PageView
-              frontmatter={parsed.frontmatter}
-              body={parsed.body}
+              frontmatter={previewParsed.frontmatter}
+              body={previewParsed.body}
               showChrome={false}
               showFooter={false}
             />

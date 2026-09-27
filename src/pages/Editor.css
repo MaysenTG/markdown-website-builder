@@ -207,6 +207,19 @@
   animation: ai-dot-pulse 1.2s ease-in-out infinite;
 }
 
+.editor__select-hint--pending {
+  color: #fcd34d;
+}
+
+.editor__select-hint--pending .editor__select-hint-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.22);
+}
+
+.editor__panel--preview.is-ai-pending {
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.45);
+}
+
 @media (max-width: 600px) {
   .editor__preview-head {
     align-items: flex-start;

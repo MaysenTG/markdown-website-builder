@@ -14,11 +14,14 @@ interface AiChatPanelProps {
   selection: ElementSelection
   sessionId: number
   messages: AiChatMessage[]
-  phase: 'idle' | 'thinking' | 'applying' | 'error'
+  phase: 'idle' | 'thinking' | 'applying' | 'pending' | 'error'
+  pending: boolean
   error: string | null
   draft: string
   onDraft: (value: string) => void
   onSend: () => void
+  onAccept: () => void
+  onReject: () => void
   onClose: () => void
 }
 
@@ -48,25 +51,35 @@ export function AiChatPanel({
   sessionId,
   messages,
   phase,
+  pending,
   error,
   draft,
   onDraft,
   onSend,
+  onAccept,
+  onReject,
   onClose,
 }: AiChatPanelProps) {
   const inputId = useId()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const wasPending = useRef(false)
   const busy = phase === 'thinking' || phase === 'applying'
   const title = selectionTitle(selection)
+  const composerLocked = busy || pending
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [sessionId])
 
   useEffect(() => {
+    if (wasPending.current && !pending) inputRef.current?.focus()
+    wasPending.current = pending
+  }, [pending])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [messages, phase, error])
+  }, [messages, phase, error, pending])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -75,7 +88,7 @@ export function AiChatPanel({
 
   return (
     <div
-      className={`ai-chat ${busy ? 'is-busy' : ''}`}
+      className={`ai-chat ${busy ? 'is-busy' : ''} ${pending ? 'ai-chat--pending' : ''}`}
       role="dialog"
       aria-label="Edit with AI"
       data-ai-phase={phase}
@@ -99,7 +112,12 @@ export function AiChatPanel({
             {selection.positionHint}
           </span>
         </div>
-        <button type="button" className="ai-chat__close" onClick={onClose} aria-label="Close chat">
+        <button
+          type="button"
+          className="ai-chat__close"
+          onClick={onClose}
+          aria-label={pending ? 'Discard preview and close' : 'Close chat'}
+        >
           <span aria-hidden="true">×</span>
         </button>
       </header>
@@ -122,6 +140,11 @@ export function AiChatPanel({
             Applying to the preview…
           </p>
         ) : null}
+        {pending ? (
+          <p className="ai-chat__status" role="status">
+            Previewing this change. It is not saved yet.
+          </p>
+        ) : null}
         {error ? (
           <p className="ai-chat__error" role="alert">
             {error}
@@ -129,6 +152,30 @@ export function AiChatPanel({
         ) : null}
         <div ref={bottomRef} />
       </div>
+
+      {pending ? (
+        <div className="ai-review" role="group" aria-label="Review AI change">
+          <p className="ai-review__note">Preview only until you accept.</p>
+          <div className="ai-review__actions">
+            <button
+              type="button"
+              className="ai-review__accept"
+              onClick={onAccept}
+              disabled={busy}
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              className="ai-review__reject"
+              onClick={onReject}
+              disabled={busy}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <form className="ai-chat__composer" onSubmit={submit}>
         <label className="ai-sr" htmlFor={inputId}>
@@ -140,26 +187,33 @@ export function AiChatPanel({
           className="ai-chat__input"
           rows={2}
           maxLength={LIMITS.maxMessageChars}
-          placeholder={inputPlaceholder(selection.tag)}
+          placeholder={
+            pending ? 'Accept or reject this preview first' : inputPlaceholder(selection.tag)
+          }
           value={draft}
+          disabled={composerLocked}
           onChange={(event) => onDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
-              onSend()
+              if (!pending) onSend()
             }
           }}
         />
         <button
           type="submit"
           className={`ai-chat__send ${busy ? 'is-busy' : ''}`}
-          disabled={busy || !draft.trim()}
-          aria-label={busy ? 'Sending' : 'Send'}
+          disabled={composerLocked || !draft.trim()}
+          aria-label={busy ? 'Sending' : pending ? 'Send disabled until you review' : 'Send'}
         >
           {busy ? 'Sending' : 'Send'}
         </button>
       </form>
-      <p className="ai-chat__keys">Enter to send · Shift+Enter for a new line · Esc exits select mode</p>
+      <p className="ai-chat__keys">
+        {pending
+          ? 'Ctrl/Cmd+Enter accepts · Escape discards'
+          : 'Enter to send · Shift+Enter for a new line · Esc exits select mode'}
+      </p>
     </div>
   )
 }
