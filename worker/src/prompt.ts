@@ -22,19 +22,28 @@ export function buildModelMessages(edit: EditRequest): Array<{ role: 'system' | 
   const latest = edit.messages[edit.messages.length - 1]
   const instruction = latest?.content ?? ''
   const headingPath = edit.selection.headingPath.join(' > ')
+  const scope =
+    edit.selection.tag === 'page'
+      ? [
+          'Scope: the entire page. You may edit any part of the markdown or frontmatter the instruction names.',
+          'There is no single selected element.',
+        ]
+      : [
+          'Selected element in the rendered preview. Edit the matching markdown source, not HTML:',
+          `- Label: ${edit.selection.label}`,
+          `- Tag: ${edit.selection.tag}`,
+          `- Index among ${edit.selection.tag} elements (zero-based): ${edit.selection.index}`,
+          `- Text excerpt: ${edit.selection.textExcerpt || '(empty)'}`,
+          `- Heading path: ${headingPath || '(none)'}`,
+          `- Position: ${edit.selection.positionHint}`,
+        ]
   const context = [
     'Current page source:',
     '----- PAGE SOURCE START -----',
     edit.document,
     '----- PAGE SOURCE END -----',
     '',
-    'Selected element in the rendered preview. Edit the matching markdown source, not HTML:',
-    `- Label: ${edit.selection.label}`,
-    `- Tag: ${edit.selection.tag}`,
-    `- Index among ${edit.selection.tag} elements (zero-based): ${edit.selection.index}`,
-    `- Text excerpt: ${edit.selection.textExcerpt || '(empty)'}`,
-    `- Heading path: ${headingPath || '(none)'}`,
-    `- Position: ${edit.selection.positionHint}`,
+    ...scope,
     '',
     'Latest instruction:',
     instruction,

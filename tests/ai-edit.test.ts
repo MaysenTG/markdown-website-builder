@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LIMITS as clientLimits } from '../src/lib/ai/limits'
 import { placePanel } from '../src/lib/ai/placePanel'
-import { nextSourceFromAiResponse, normalizeModelDocument } from '../src/lib/ai/protocol'
+import { assertAiEditRequest, nextSourceFromAiResponse, normalizeModelDocument } from '../src/lib/ai/protocol'
 import { requestAiEdit } from '../src/lib/ai/client'
 import type { AiEditRequest } from '../src/lib/ai/types'
 import { LIMITS as workerLimits } from '../worker/src/limits'
 import { handleFetch } from '../worker/src/index'
 import { buildOpenAiCall, completeEdit, parseModelContent } from '../worker/src/openai'
-import { SYSTEM_PROMPT } from '../worker/src/prompt'
+import { SYSTEM_PROMPT, buildModelMessages } from '../worker/src/prompt'
 import { checkRateLimit, matchAllowedOrigin, parseAllowedOrigins, safeEqual, validateEditRequest } from '../worker/src/policy'
 import type { Env } from '../worker/src/types'
 
@@ -181,6 +181,45 @@ describe('worker origins', () => {
 
     const custom = parseAllowedOrigins('https://notes.example.com,https://*.pages.dev')
     expect(matchAllowedOrigin('https://notes.example.com', custom)).toBe('https://notes.example.com')
+  })
+})
+
+describe('message length', () => {
+  it('caps user instructions at 100 characters and still allows a longer assistant reply', () => {
+    expect(clientLimits.maxUserMessageChars).toBe(100)
+    const exact = 'a'.repeat(100)
+    expect(() => assertAiEditRequest(editRequest(exact))).not.toThrow()
+    expect(validateEditRequest(editRequest(exact)).ok).toBe(true)
+
+    const tooLong = 'a'.repeat(101)
+    expect(() => assertAiEditRequest(editRequest(tooLong))).toThrow(/100 characters/)
+    const rejected = validateEditRequest(editRequest(tooLong))
+    expect(rejected.ok).toBe(false)
+
+    const followUp = editRequest('Again')
+    followUp.messages = [
+      { role: 'user', content: 'Short' },
+      { role: 'assistant', content: 'a'.repeat(180) },
+      { role: 'user', content: 'Again' },
+    ]
+    expect(() => assertAiEditRequest(followUp)).not.toThrow()
+    expect(validateEditRequest(followUp).ok).toBe(true)
+  })
+
+  it('sends a whole-page edit without an element path', () => {
+    const request = editRequest('Tighten the introduction')
+    request.selection = {
+      tag: 'page',
+      label: 'Entire page',
+      textExcerpt: '',
+      headingPath: [],
+      positionHint: 'Markdown and frontmatter',
+      index: 0,
+    }
+    expect(validateEditRequest(request).ok).toBe(true)
+    const prompt = buildModelMessages(request).at(-1)?.content ?? ''
+    expect(prompt).toContain('entire page')
+    expect(prompt).not.toContain('Index among')
   })
 })
 

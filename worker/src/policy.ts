@@ -162,7 +162,14 @@ export function validateEditRequest(input: unknown): { ok: true; value: EditRequ
     if (typeof record.content !== 'string' || !record.content.trim()) {
       return fail('Each message needs text content.')
     }
-    if (record.content.length > LIMITS.maxMessageChars) return fail('A message is too long.')
+    const limit = expected === 'user' ? LIMITS.maxUserMessageChars : LIMITS.maxResponseMessageChars
+    if (record.content.length > limit) {
+      return fail(
+        expected === 'user'
+          ? `Keep each instruction under ${LIMITS.maxUserMessageChars} characters.`
+          : 'A message is too long.',
+      )
+    }
     messages.push({ role: expected, content: record.content })
   }
   if (messages[messages.length - 1]?.role !== 'user') {

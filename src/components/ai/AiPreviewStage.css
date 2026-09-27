@@ -27,6 +27,10 @@
   user-select: none;
 }
 
+.ai-stage[data-page-chat='true'] .ai-stage__scroll {
+  box-shadow: inset 0 0 0 2px rgba(129, 140, 248, 0.55);
+}
+
 .ai-stage__overlay {
   position: absolute;
   inset: 0;
@@ -371,12 +375,34 @@
   cursor: progress;
 }
 
+.ai-chat__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.55rem;
+  flex-shrink: 0;
+}
+
 .ai-chat__keys {
   margin: 0;
-  padding: 0 0.75rem 0.55rem;
+  padding: 0;
   color: #64748b;
   font-size: 0.68rem;
+}
+
+.ai-chat__count {
+  margin: 0;
   flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ai-chat__count.is-limit {
+  color: #fcd34d;
+  font-weight: 600;
 }
 
 .ai-chat--pending {

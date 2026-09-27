@@ -61,6 +61,27 @@
   cursor: not-allowed;
 }
 
+.editor__btn--ai {
+  background: #312e81;
+  border-color: #818cf8;
+  color: #eef2ff;
+}
+
+.editor__btn--ai:hover {
+  background: #3730a3;
+}
+
+.editor__btn--ai[aria-pressed='true'] {
+  background: #4f46e5;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.28);
+}
+
+.editor__btn--ai[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .editor__btn--select[aria-pressed='true'] {
   background: #312e81;
   border-color: #818cf8;

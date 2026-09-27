@@ -26,6 +26,17 @@ function loadDraft(): string {
   return DEFAULT_EDITOR_DRAFT
 }
 
+function SparkIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M6 0.6 7.1 4.2 10.8 4.4 7.9 6.7 8.9 10.3 6 8.2 3.1 10.3 4.1 6.7 1.2 4.4 4.9 4.2Z"
+      />
+    </svg>
+  )
+}
+
 function CrosshairIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
@@ -45,6 +56,7 @@ export function Editor() {
   const [previewSource, setPreviewSource] = useState<string | null>(null)
   const [copyStatus, setCopyStatus] = useState<string | null>(null)
   const [selectMode, setSelectMode] = useState(false)
+  const [pageChat, setPageChat] = useState(false)
   const [toast, setToast] = useState<{ id: number; kind: ToastKind; text: string } | null>(null)
   const toastId = useRef(0)
   const aiEnabled = aiEditingEnabled()
@@ -83,16 +95,31 @@ export function Editor() {
   }, [toast])
 
   const exitSelectMode = useCallback(() => setSelectMode(false), [])
+  const exitPageChat = useCallback(() => setPageChat(false), [])
+
+  const explainAiOff = () => {
+    showToast(
+      'info',
+      'AI editing is off. Set VITE_AI_PROXY_URL and deploy the Cloudflare Worker — see the README.',
+    )
+  }
 
   const toggleSelect = () => {
     if (!aiEnabled) {
-      showToast(
-        'info',
-        'AI editing is off. Set VITE_AI_PROXY_URL and deploy the Cloudflare Worker — see the README.',
-      )
+      explainAiOff()
       return
     }
+    setPageChat(false)
     setSelectMode((on) => !on)
+  }
+
+  const togglePageChat = () => {
+    if (!aiEnabled) {
+      explainAiOff()
+      return
+    }
+    setSelectMode(false)
+    setPageChat((on) => !on)
   }
 
   const editSource = useCallback((next: string) => {
@@ -125,6 +152,21 @@ export function Editor() {
           Markdown website builder
         </Link>
         <div className="editor__bar-actions">
+          <button
+            type="button"
+            className="editor__btn editor__btn--ai"
+            aria-pressed={pageChat}
+            aria-disabled={!aiEnabled}
+            title={
+              aiEnabled
+                ? 'Edit the whole page with AI'
+                : 'AI editing is not configured. See the README.'
+            }
+            onClick={togglePageChat}
+          >
+            <SparkIcon />
+            Edit page with AI
+          </button>
           <button
             type="button"
             className="editor__btn editor__btn--select"
@@ -256,6 +298,11 @@ export function Editor() {
                 <span className="editor__select-hint-dot" aria-hidden="true" />
                 AI preview · Escape discards
               </p>
+            ) : pageChat ? (
+              <p className="editor__select-hint">
+                <span className="editor__select-hint-dot" aria-hidden="true" />
+                Whole page · Esc closes
+              </p>
             ) : selectMode ? (
               <p className="editor__select-hint">
                 <span className="editor__select-hint-dot" aria-hidden="true" />
@@ -266,9 +313,11 @@ export function Editor() {
           <AiPreviewStage
             source={source}
             selectMode={selectMode && aiEnabled}
+            pageChat={pageChat && aiEnabled}
             onApply={setSource}
             onPreview={setPreviewSource}
             onExitSelectMode={exitSelectMode}
+            onExitPageChat={exitPageChat}
             onNotify={showToast}
           >
             <PageView

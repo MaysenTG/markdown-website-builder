@@ -12,6 +12,7 @@ import { requestAiEdit } from '../../lib/ai/client'
 import {
   describeSelection,
   findSelectedElement,
+  pageSelection,
   pickSelectable,
 } from '../../lib/ai/describeSelection'
 import { placePanel, type Box } from '../../lib/ai/placePanel'
@@ -46,9 +47,11 @@ interface HoverState {
 interface AiPreviewStageProps {
   source: string
   selectMode: boolean
+  pageChat: boolean
   onApply: (next: string) => void
   onPreview: (next: string | null) => void
   onExitSelectMode: () => void
+  onExitPageChat: () => void
   onNotify: (kind: ToastKind, text: string) => void
   children: ReactNode
 }
@@ -80,9 +83,11 @@ function OverlayBox({
 export function AiPreviewStage({
   source,
   selectMode,
+  pageChat,
   onApply,
   onPreview,
   onExitSelectMode,
+  onExitPageChat,
   onNotify,
   children,
 }: AiPreviewStageProps) {
@@ -116,10 +121,28 @@ export function AiPreviewStage({
   const [flash, setFlash] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [seenSelectMode, setSeenSelectMode] = useState(selectMode)
+  const [seenPageChat, setSeenPageChat] = useState(pageChat)
 
-  if (selectMode !== seenSelectMode) {
+  if (selectMode !== seenSelectMode || pageChat !== seenPageChat) {
+    const wasPageChat = seenPageChat
     setSeenSelectMode(selectMode)
-    if (!selectMode) {
+    setSeenPageChat(pageChat)
+    if (pageChat) {
+      setHover(null)
+      setSelectedEl(null)
+      setSelectBox(null)
+      setPhase('idle')
+      setError(null)
+      setDraft('')
+      setFlash(false)
+      setRejecting(false)
+      setPending(null)
+      setSession((existing) =>
+        existing?.selection.tag === 'page'
+          ? existing
+          : { id: (existing?.id ?? 0) + 1, selection: pageSelection(), messages: [] },
+      )
+    } else if (!selectMode || wasPageChat) {
       setSession(null)
       setPending(null)
       setHover(null)
@@ -164,8 +187,13 @@ export function AiPreviewStage({
     onNotifyRef.current = onNotify
   }, [session, source, pending, selectedEl, hover, onPreview, onApply, onNotify])
 
+  const chatMode = pageChat ? 'page' : selectMode ? 'select' : 'off'
+  const chatModeRef = useRef(chatMode)
+
   useEffect(() => {
-    if (selectMode) return
+    const previous = chatModeRef.current
+    chatModeRef.current = chatMode
+    if (previous === chatMode) return
     requestGen.current += 1
     busyRef.current = false
     pendingRef.current = null
@@ -173,7 +201,7 @@ export function AiPreviewStage({
     selectedElRef.current = null
     hoverElRef.current = null
     onPreviewRef.current(null)
-  }, [selectMode, clearPhaseTimer])
+  }, [chatMode, clearPhaseTimer])
 
   useEffect(() => {
     const current = pendingRef.current
@@ -186,7 +214,7 @@ export function AiPreviewStage({
   }, [source])
 
   useEffect(() => {
-    if (!selectMode) return
+    if (!selectMode && !pageChat) return
     const onKey = (event: KeyboardEvent) => {
       const acceptKey = (event.metaKey || event.ctrlKey) && event.key === 'Enter'
       if (acceptKey) {
@@ -205,11 +233,12 @@ export function AiPreviewStage({
       }
       requestGen.current += 1
       busyRef.current = false
-      onExitSelectMode()
+      if (pageChat) onExitPageChat()
+      else onExitSelectMode()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [selectMode, onExitSelectMode])
+  }, [selectMode, pageChat, onExitSelectMode, onExitPageChat])
 
   useEffect(() => {
     return () => clearPhaseTimer()
@@ -270,6 +299,19 @@ export function AiPreviewStage({
   }, [source, selectMode, session?.id, measure, pending])
 
   useLayoutEffect(() => {
+    if (!pageChat || !session) return
+    const shell = shellRef.current
+    const panel = panelRef.current
+    if (!shell || !panel) return
+    const cap = Math.min(420, Math.max(220, shell.clientHeight - 16))
+    setPanelMax((prev) => (prev === cap ? prev : cap))
+    const margin = 12
+    const left = Math.max(margin, shell.clientWidth - panel.offsetWidth - margin)
+    setPanelPos((prev) => (prev.top === margin && prev.left === left ? prev : { top: margin, left }))
+  }, [pageChat, session, phase, error, panelMax, pending])
+
+  useLayoutEffect(() => {
+    if (pageChat) return
     const shell = shellRef.current
     const panel = panelRef.current
     if (!shell || !panel || !selectBox || !session) return
@@ -281,7 +323,7 @@ export function AiPreviewStage({
       { width: panel.offsetWidth, height: panel.offsetHeight },
     )
     setPanelPos((prev) => (prev.top === next.top && prev.left === next.left ? prev : next))
-  }, [selectBox, session, phase, error, panelMax])
+  }, [pageChat, selectBox, session, phase, error, panelMax])
 
   const rememberProposal = (next: PendingProposal | null) => {
     pendingRef.current = next
@@ -359,6 +401,7 @@ export function AiPreviewStage({
     setError(null)
     setDraft('')
     setFlash(false)
+    if (pageChat) onExitPageChat()
   }
 
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
@@ -514,6 +557,7 @@ export function AiPreviewStage({
       className={`ai-stage ${flash ? 'ai-stage--flash' : ''} ${pending ? 'ai-stage--pending' : ''} ${rejecting ? 'ai-stage--reject' : ''}`}
       ref={shellRef}
       data-selecting={selectMode ? 'true' : 'false'}
+      data-page-chat={pageChat ? 'true' : 'false'}
       data-proposal={pending ? 'pending' : 'none'}
     >
       <div
@@ -527,18 +571,18 @@ export function AiPreviewStage({
       >
         {children}
       </div>
-      {selectMode ? (
+      {selectMode || pageChat ? (
         <div className="ai-stage__overlay">
-          {hover && hover.el !== selectedEl ? (
+          {selectMode && hover && hover.el !== selectedEl ? (
             <OverlayBox box={hover.box} tag={hover.tag} />
           ) : null}
-          {session && selectBox ? (
+          {selectMode && session && selectBox ? (
             <OverlayBox box={selectBox} tag={session.selection.tag} selected pending={pending !== null} />
           ) : null}
-          {session && selectBox ? (
+          {(pageChat && session) || (selectMode && session && selectBox) ? (
             <div
               ref={panelRef}
-              className="ai-chat-anchor"
+              className={`ai-chat-anchor ${pageChat ? 'ai-chat-anchor--page' : ''}`}
               style={
                 {
                   top: panelPos.top,
@@ -553,6 +597,7 @@ export function AiPreviewStage({
                 messages={session.messages}
                 phase={phase}
                 pending={pending !== null}
+                scope={pageChat ? 'page' : 'section'}
                 error={error}
                 draft={draft}
                 onDraft={setDraft}
@@ -565,14 +610,16 @@ export function AiPreviewStage({
               />
             </div>
           ) : null}
-          {flash ? <div className="ai-apply-flash" /> : null}
           {!session ? (
             <p className="ai-sr">
-              Select mode is on. Click an element in the preview to describe a change. Press Escape to exit.
+              {pageChat
+                ? 'Page editing is open. Describe a change for the whole page. Press Escape to close.'
+                : 'Select mode is on. Click an element in the preview to describe a change. Press Escape to exit.'}
             </p>
           ) : null}
         </div>
       ) : null}
+      {flash ? <div className="ai-apply-flash" /> : null}
     </div>
   )
 }

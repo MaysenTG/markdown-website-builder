@@ -5,7 +5,6 @@ import type { AiChatMessage, ElementSelection } from '../../lib/ai/types'
 
 const THINKING_PHRASES = [
   'Reading the page…',
-  'Focusing on your selection…',
   'Rewriting markdown…',
   'Checking frontmatter…',
 ]
@@ -16,6 +15,7 @@ interface AiChatPanelProps {
   messages: AiChatMessage[]
   phase: 'idle' | 'thinking' | 'applying' | 'pending' | 'error'
   pending: boolean
+  scope: 'page' | 'section'
   error: string | null
   draft: string
   onDraft: (value: string) => void
@@ -25,14 +25,16 @@ interface AiChatPanelProps {
   onClose: () => void
 }
 
-function Thinking() {
+function Thinking({ scope }: { scope: 'page' | 'section' }) {
+  const phrases =
+    scope === 'page' ? ['Reading the whole page…', ...THINKING_PHRASES.slice(1)] : ['Focusing on your selection…', ...THINKING_PHRASES]
   const [index, setIndex] = useState(0)
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setIndex((value) => (value + 1) % THINKING_PHRASES.length)
+      setIndex((value) => (value + 1) % phrases.length)
     }, 1600)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [phrases.length])
 
   return (
     <div className="ai-thinking" role="status">
@@ -41,7 +43,7 @@ function Thinking() {
         <span />
         <span />
       </span>
-      <span>{THINKING_PHRASES[index]}</span>
+      <span>{phrases[index]}</span>
     </div>
   )
 }
@@ -52,6 +54,7 @@ export function AiChatPanel({
   messages,
   phase,
   pending,
+  scope,
   error,
   draft,
   onDraft,
@@ -67,6 +70,9 @@ export function AiChatPanel({
   const busy = phase === 'thinking' || phase === 'applying'
   const title = selectionTitle(selection)
   const composerLocked = busy || pending
+  const count = draft.length
+  const atLimit = count >= LIMITS.maxUserMessageChars
+  const countId = `${inputId}-count`
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -125,8 +131,7 @@ export function AiChatPanel({
       <div className="ai-chat__messages" aria-live="polite">
         {messages.length === 0 && phase !== 'thinking' ? (
           <p className="ai-chat__empty">
-            Describe a change. The assistant rewrites this page’s markdown and frontmatter, using the
-            selected element as the focus.
+            {scope === 'page' ? 'Use AI to enhance this page' : 'Use AI to enhance the section you selected'}
           </p>
         ) : null}
         {messages.map((message, index) => (
@@ -134,7 +139,7 @@ export function AiChatPanel({
             {message.content}
           </p>
         ))}
-        {phase === 'thinking' ? <Thinking /> : null}
+        {phase === 'thinking' ? <Thinking scope={scope} /> : null}
         {phase === 'applying' ? (
           <p className="ai-chat__status" role="status">
             Applying to the preview…
@@ -186,13 +191,14 @@ export function AiChatPanel({
           ref={inputRef}
           className="ai-chat__input"
           rows={2}
-          maxLength={LIMITS.maxMessageChars}
+          maxLength={LIMITS.maxUserMessageChars}
           placeholder={
             pending ? 'Accept or reject this preview first' : inputPlaceholder(selection.tag)
           }
           value={draft}
           disabled={composerLocked}
-          onChange={(event) => onDraft(event.target.value)}
+          aria-describedby={countId}
+          onChange={(event) => onDraft(event.target.value.slice(0, LIMITS.maxUserMessageChars))}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
@@ -203,17 +209,28 @@ export function AiChatPanel({
         <button
           type="submit"
           className={`ai-chat__send ${busy ? 'is-busy' : ''}`}
-          disabled={composerLocked || !draft.trim()}
+          disabled={composerLocked || !draft.trim() || draft.length > LIMITS.maxUserMessageChars}
           aria-label={busy ? 'Sending' : pending ? 'Send disabled until you review' : 'Send'}
         >
           {busy ? 'Sending' : 'Send'}
         </button>
       </form>
-      <p className="ai-chat__keys">
-        {pending
-          ? 'Ctrl/Cmd+Enter accepts · Escape discards'
-          : 'Enter to send · Shift+Enter for a new line · Esc exits select mode'}
-      </p>
+      <div className="ai-chat__meta">
+        <p className="ai-chat__keys">
+          {pending
+            ? 'Ctrl/Cmd+Enter accepts · Escape discards'
+            : scope === 'page'
+              ? 'Enter to send · Shift+Enter for a new line · Esc closes'
+              : 'Enter to send · Shift+Enter for a new line · Esc exits select mode'}
+        </p>
+        <p
+          id={countId}
+          className={`ai-chat__count ${atLimit ? 'is-limit' : ''}`}
+          title={`Max ${LIMITS.maxUserMessageChars} characters`}
+        >
+          {count}/{LIMITS.maxUserMessageChars}
+        </p>
+      </div>
     </div>
   )
 }

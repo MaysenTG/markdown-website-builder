@@ -82,7 +82,7 @@ The viewer always shows a small site footer (About, Editor, GitHub). There is no
 
 ## AI editing
 
-On `/edit`, **Select** turns on a DevTools-style picker over the live preview. Hover outlines an element; click opens a small chat next to it. The assistant rewrites the page’s markdown and YAML frontmatter and shows that rewrite in the live preview. The editor source and the localStorage draft stay unchanged until you **Accept**. **Reject**, Escape, or closing the chat discards the preview and restores the previous page. The chat stays open after Reject so you can try another instruction; another send is blocked while a preview is waiting. Escape leaves select mode when nothing is pending. Ctrl+Enter (or Cmd+Enter) accepts.
+On `/edit`, **Edit page with AI** opens a chat for the whole document (markdown and frontmatter). **Select** is the section tool: hover outlines an element, and a click opens a chat for that section. Each instruction is limited to 100 characters (`maxUserMessageChars`). The assistant’s reply is shown in the live preview. The editor source and the localStorage draft stay unchanged until you **Accept**. **Reject**, Escape, or closing the chat discards the preview and restores the previous page. The chat stays open after Reject so you can try another instruction; another send is blocked while a preview is waiting. Escape leaves select mode, or closes the page chat, when nothing is pending. Ctrl+Enter (or Cmd+Enter) accepts.
 
 If `VITE_AI_PROXY_URL` is empty, Select stays in the toolbar but does not call anything. Clicking it explains that AI is off and points here. The rest of the editor works as before.
 

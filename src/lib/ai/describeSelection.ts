@@ -169,12 +169,25 @@ export function findSelectedElement(
   return match instanceof HTMLElement ? match : null
 }
 
+/** Whole-document target. The worker treats tag "page" as the full source, not an element. */
+export function pageSelection(): ElementSelection {
+  return {
+    tag: 'page',
+    label: 'Entire page',
+    textExcerpt: '',
+    headingPath: [],
+    positionHint: 'Markdown and frontmatter',
+    index: 0,
+  }
+}
+
 export function selectionTitle(selection: ElementSelection): string {
   const snippet = collapse(selection.textExcerpt, 42)
   return snippet ? `${selection.label} · “${snippet}”` : selection.label
 }
 
 export function inputPlaceholder(tag: string): string {
+  if (tag === 'page') return 'Describe a change to this page…'
   if (/^h[1-6]$/.test(tag)) return 'Rewrite this heading…'
   if (tag === 'img') return 'Describe a different image…'
   if (tag === 'a') return 'Change this link…'
