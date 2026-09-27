@@ -10,11 +10,8 @@ compatibility_date = "2026-09-27"
 # Examples: gpt-4o-mini, gpt-4o
 [vars]
 OPENAI_MODEL = "gpt-4o-mini"
-
-# Optional. Comma-separated browser Origins. If you set this, it replaces the
-# defaults (every https://*.pages.dev host + local Vite). Include every origin
-# you actually use, including a custom domain.
-# ALLOWED_ORIGINS = "https://*.pages.dev,https://example.com,http://localhost:5173,http://127.0.0.1:5173"
+# Replaces the broad defaults. Add a custom domain here when you attach one.
+ALLOWED_ORIGINS = "https://markdown-website-builder.pages.dev,https://*.markdown-website-builder.pages.dev,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
 
 # Optional. Another API root, without a trailing path. Default is OpenAI.
 # OPENAI_BASE_URL = "https://api.openai.com/v1"
