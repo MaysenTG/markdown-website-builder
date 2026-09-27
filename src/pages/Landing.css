@@ -1,11 +1,17 @@
-.landing {
+.landing-page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(ellipse at top, #eef2ff 0%, #f8fafc 45%, #f1f5f9 100%);
+  color: #0f172a;
+}
+
+.landing {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1.25rem;
-  background: radial-gradient(ellipse at top, #eef2ff 0%, #f8fafc 45%, #f1f5f9 100%);
-  color: #0f172a;
+  padding: 2rem 1.25rem 1rem;
 }
 
 .landing__card {

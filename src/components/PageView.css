@@ -1,5 +1,7 @@
 .page-view {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--page-bg, var(--surface-bg));
   color: var(--surface-text);
   font-family: var(--page-font);
@@ -66,10 +68,12 @@
 }
 
 .page-view__article {
+  flex: 1;
   max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 2rem 1.25rem 3rem;
+  padding: 2rem 1.25rem 2rem;
   line-height: 1.65;
+  width: 100%;
 }
 
 .page-view__sr-title {
