@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageView } from '../components/PageView'
-import { buildShareUrl, encodePagePayload } from '../lib/encode'
+import { buildShareUrl, encodePagePayload, readPayloadFromLocation } from '../lib/encode'
 import { DEFAULT_EDITOR_DRAFT } from '../lib/examples'
 import { parsePageSource, updateFrontmatter } from '../lib/parsePage'
 import type { PageTheme } from '../lib/types'
@@ -10,6 +10,9 @@ import './Editor.css'
 const STORAGE_KEY = 'md-url-pages-draft'
 
 function loadDraft(): string {
+  const fromUrl = readPayloadFromLocation()
+  if (fromUrl) return fromUrl
+
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) return saved
