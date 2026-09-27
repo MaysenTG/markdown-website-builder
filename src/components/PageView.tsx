@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import type { PageFrontmatter } from '../lib/types'
 import { renderMarkdownToHtml } from '../lib/renderMarkdown'
 import './PageView.css'
@@ -16,6 +17,7 @@ function themeClass(theme: PageFrontmatter['theme']): string {
 }
 
 export function PageView({ frontmatter, body, showChrome = true }: PageViewProps) {
+  const location = useLocation()
   const html = useMemo(() => renderMarkdownToHtml(body), [body])
   const hideChrome = frontmatter.hideChrome === true
 
@@ -35,9 +37,12 @@ export function PageView({ frontmatter, body, showChrome = true }: PageViewProps
       {!hideChrome && showChrome && (
         <header className="page-view__chrome">
           <span className="page-view__title">{frontmatter.title ?? 'Untitled page'}</span>
-          <a className="page-view__edit-link" href="/edit">
+          <Link
+            className="page-view__edit-link"
+            to={{ pathname: '/edit', hash: location.hash, search: location.search }}
+          >
             Edit
-          </a>
+          </Link>
         </header>
       )}
       <article className="page-view__article">
