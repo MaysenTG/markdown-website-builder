@@ -16,7 +16,7 @@ function ghPagesSpaFallback(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  // GitHub Pages project site: https://maysentg.github.io/md-url-pages/
-  base: '/md-url-pages/',
+  // GitHub Pages project site: https://maysentg.github.io/markdown-website-builder/
+  base: '/markdown-website-builder/',
   plugins: [react(), ghPagesSpaFallback()],
 })
