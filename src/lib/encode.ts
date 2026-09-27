@@ -36,6 +36,9 @@ export function readPayloadFromLocation(): string | null {
 }
 
 export function buildShareUrl(encoded: string, path: '/' | '/v' = '/'): string {
-  const base = `${window.location.origin}${path === '/v' ? '/v' : '/'}`
-  return `${base}#${PAYLOAD_PREFIX}${encoded}`
+  const basePath = import.meta.env.BASE_URL
+  const pathname = path === '/v' ? `${basePath}v` : basePath
+  const url = new URL(pathname, window.location.origin)
+  url.hash = `${PAYLOAD_PREFIX}${encoded}`
+  return url.href
 }
