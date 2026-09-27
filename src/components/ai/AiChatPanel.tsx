@@ -5,7 +5,6 @@ import type { AiChatMessage, ElementSelection } from '../../lib/ai/types'
 
 const THINKING_PHRASES = [
   'Reading the page…',
-  'Focusing on your selection…',
   'Rewriting markdown…',
   'Checking frontmatter…',
 ]
@@ -14,22 +13,28 @@ interface AiChatPanelProps {
   selection: ElementSelection
   sessionId: number
   messages: AiChatMessage[]
-  phase: 'idle' | 'thinking' | 'applying' | 'error'
+  phase: 'idle' | 'thinking' | 'applying' | 'pending' | 'error'
+  pending: boolean
+  scope: 'page' | 'section'
   error: string | null
   draft: string
   onDraft: (value: string) => void
   onSend: () => void
+  onAccept: () => void
+  onReject: () => void
   onClose: () => void
 }
 
-function Thinking() {
+function Thinking({ scope }: { scope: 'page' | 'section' }) {
+  const phrases =
+    scope === 'page' ? ['Reading the whole page…', ...THINKING_PHRASES.slice(1)] : ['Focusing on your selection…', ...THINKING_PHRASES]
   const [index, setIndex] = useState(0)
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setIndex((value) => (value + 1) % THINKING_PHRASES.length)
+      setIndex((value) => (value + 1) % phrases.length)
     }, 1600)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [phrases.length])
 
   return (
     <div className="ai-thinking" role="status">
@@ -38,7 +43,7 @@ function Thinking() {
         <span />
         <span />
       </span>
-      <span>{THINKING_PHRASES[index]}</span>
+      <span>{phrases[index]}</span>
     </div>
   )
 }
@@ -48,25 +53,39 @@ export function AiChatPanel({
   sessionId,
   messages,
   phase,
+  pending,
+  scope,
   error,
   draft,
   onDraft,
   onSend,
+  onAccept,
+  onReject,
   onClose,
 }: AiChatPanelProps) {
   const inputId = useId()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const wasPending = useRef(false)
   const busy = phase === 'thinking' || phase === 'applying'
   const title = selectionTitle(selection)
+  const composerLocked = busy || pending
+  const count = draft.length
+  const atLimit = count >= LIMITS.maxUserMessageChars
+  const countId = `${inputId}-count`
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [sessionId])
 
   useEffect(() => {
+    if (wasPending.current && !pending) inputRef.current?.focus()
+    wasPending.current = pending
+  }, [pending])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [messages, phase, error])
+  }, [messages, phase, error, pending])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -75,7 +94,7 @@ export function AiChatPanel({
 
   return (
     <div
-      className={`ai-chat ${busy ? 'is-busy' : ''}`}
+      className={`ai-chat ${busy ? 'is-busy' : ''} ${pending ? 'ai-chat--pending' : ''}`}
       role="dialog"
       aria-label="Edit with AI"
       data-ai-phase={phase}
@@ -99,7 +118,12 @@ export function AiChatPanel({
             {selection.positionHint}
           </span>
         </div>
-        <button type="button" className="ai-chat__close" onClick={onClose} aria-label="Close chat">
+        <button
+          type="button"
+          className="ai-chat__close"
+          onClick={onClose}
+          aria-label={pending ? 'Discard preview and close' : 'Close chat'}
+        >
           <span aria-hidden="true">×</span>
         </button>
       </header>
@@ -107,8 +131,7 @@ export function AiChatPanel({
       <div className="ai-chat__messages" aria-live="polite">
         {messages.length === 0 && phase !== 'thinking' ? (
           <p className="ai-chat__empty">
-            Describe a change. The assistant rewrites this page’s markdown and frontmatter, using the
-            selected element as the focus.
+            {scope === 'page' ? 'Use AI to enhance this page' : 'Use AI to enhance the section you selected'}
           </p>
         ) : null}
         {messages.map((message, index) => (
@@ -116,10 +139,15 @@ export function AiChatPanel({
             {message.content}
           </p>
         ))}
-        {phase === 'thinking' ? <Thinking /> : null}
+        {phase === 'thinking' ? <Thinking scope={scope} /> : null}
         {phase === 'applying' ? (
           <p className="ai-chat__status" role="status">
             Applying to the preview…
+          </p>
+        ) : null}
+        {pending ? (
+          <p className="ai-chat__status" role="status">
+            Previewing this change. It is not saved yet.
           </p>
         ) : null}
         {error ? (
@@ -130,6 +158,30 @@ export function AiChatPanel({
         <div ref={bottomRef} />
       </div>
 
+      {pending ? (
+        <div className="ai-review" role="group" aria-label="Review AI change">
+          <p className="ai-review__note">Preview only until you accept.</p>
+          <div className="ai-review__actions">
+            <button
+              type="button"
+              className="ai-review__accept"
+              onClick={onAccept}
+              disabled={busy}
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              className="ai-review__reject"
+              onClick={onReject}
+              disabled={busy}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <form className="ai-chat__composer" onSubmit={submit}>
         <label className="ai-sr" htmlFor={inputId}>
           Change request
@@ -139,27 +191,46 @@ export function AiChatPanel({
           ref={inputRef}
           className="ai-chat__input"
           rows={2}
-          maxLength={LIMITS.maxMessageChars}
-          placeholder={inputPlaceholder(selection.tag)}
+          maxLength={LIMITS.maxUserMessageChars}
+          placeholder={
+            pending ? 'Accept or reject this preview first' : inputPlaceholder(selection.tag)
+          }
           value={draft}
-          onChange={(event) => onDraft(event.target.value)}
+          disabled={composerLocked}
+          aria-describedby={countId}
+          onChange={(event) => onDraft(event.target.value.slice(0, LIMITS.maxUserMessageChars))}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
-              onSend()
+              if (!pending) onSend()
             }
           }}
         />
         <button
           type="submit"
           className={`ai-chat__send ${busy ? 'is-busy' : ''}`}
-          disabled={busy || !draft.trim()}
-          aria-label={busy ? 'Sending' : 'Send'}
+          disabled={composerLocked || !draft.trim() || draft.length > LIMITS.maxUserMessageChars}
+          aria-label={busy ? 'Sending' : pending ? 'Send disabled until you review' : 'Send'}
         >
           {busy ? 'Sending' : 'Send'}
         </button>
       </form>
-      <p className="ai-chat__keys">Enter to send · Shift+Enter for a new line · Esc exits select mode</p>
+      <div className="ai-chat__meta">
+        <p className="ai-chat__keys">
+          {pending
+            ? 'Ctrl/Cmd+Enter accepts · Escape discards'
+            : scope === 'page'
+              ? 'Enter to send · Shift+Enter for a new line · Esc closes'
+              : 'Enter to send · Shift+Enter for a new line · Esc exits select mode'}
+        </p>
+        <p
+          id={countId}
+          className={`ai-chat__count ${atLimit ? 'is-limit' : ''}`}
+          title={`Max ${LIMITS.maxUserMessageChars} characters`}
+        >
+          {count}/{LIMITS.maxUserMessageChars}
+        </p>
+      </div>
     </div>
   )
 }

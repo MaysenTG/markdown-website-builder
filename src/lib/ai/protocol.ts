@@ -162,8 +162,16 @@ export function assertAiEditRequest(request: AiEditRequest): void {
     if (message.role !== expected) {
       throw new AiEditError('The chat transcript could not be sent. Start a new selection and try again.')
     }
-    if (!message.content.trim() || message.content.length > LIMITS.maxMessageChars) {
+    if (!message.content.trim()) {
       throw new AiEditError('That message is empty or too long.')
+    }
+    const limit = message.role === 'user' ? LIMITS.maxUserMessageChars : LIMITS.maxResponseMessageChars
+    if (message.content.length > limit) {
+      throw new AiEditError(
+        message.role === 'user'
+          ? `Keep each instruction under ${LIMITS.maxUserMessageChars} characters.`
+          : 'That message is empty or too long.',
+      )
     }
   }
 }

@@ -82,13 +82,13 @@ The viewer always shows a small site footer (About, Editor, GitHub). There is no
 
 ## AI editing
 
-On `/edit`, **Select** turns on a DevTools-style picker over the live preview. Hover outlines an element; click opens a small chat next to it. The assistant rewrites the page’s markdown and YAML frontmatter (the same source the editor already stores), and the preview updates. The draft still goes to localStorage. Escape leaves select mode.
+On `/edit`, **Edit page with AI** opens a chat for the whole document (markdown and frontmatter). **Select** is the section tool: hover outlines an element, and a click opens a chat for that section. Each instruction is limited to 100 characters (`maxUserMessageChars`). The assistant’s reply is shown in the live preview. The editor source and the localStorage draft stay unchanged until you **Accept**. **Reject**, Escape, or closing the chat discards the preview and restores the previous page. The chat stays open after Reject so you can try another instruction; another send is blocked while a preview is waiting. Escape leaves select mode, or closes the page chat, when nothing is pending. Ctrl+Enter (or Cmd+Enter) accepts.
 
 If `VITE_AI_PROXY_URL` is empty, Select stays in the toolbar but does not call anything. Clicking it explains that AI is off and points here. The rest of the editor works as before.
 
 The browser never sees an OpenAI API key. It only talks to your Worker.
 
-**Request flow.** The editor sends the current document, a description of the element you clicked (tag, text excerpt, heading path, position), and the chat transcript to `POST VITE_AI_PROXY_URL`. The Worker checks the browser `Origin`, an optional gate token, a body-size cap, and a best-effort per-IP rate limit, then calls OpenAI Chat Completions with `OPENAI_API_KEY`. The model must return the **complete** updated document. The editor replaces its source with that document after checking that the frontmatter still parses and that the edit did not add a script tag.
+**Request flow.** The editor sends the current document, a description of the element you clicked (tag, text excerpt, heading path, position), and the chat transcript to `POST VITE_AI_PROXY_URL`. The Worker checks the browser `Origin`, an optional gate token, a body-size cap, and a best-effort per-IP rate limit, then calls OpenAI Chat Completions with `OPENAI_API_KEY`. The model must return the **complete** updated document. The editor checks that the frontmatter still parses and that the edit did not add a script tag, then stages the document as a preview. Accept writes it into the editor source and the localStorage draft. Reject restores the previous source.
 
 Wire shape:
 

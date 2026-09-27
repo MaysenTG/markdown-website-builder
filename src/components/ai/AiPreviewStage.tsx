@@ -12,15 +12,24 @@ import { requestAiEdit } from '../../lib/ai/client'
 import {
   describeSelection,
   findSelectedElement,
+  pageSelection,
   pickSelectable,
 } from '../../lib/ai/describeSelection'
 import { placePanel, type Box } from '../../lib/ai/placePanel'
-import { AiEditError, nextSourceFromAiResponse } from '../../lib/ai/protocol'
+import {
+  previewDocument,
+  sendBlockedByProposal,
+  sourceAfterAccept,
+  sourceAfterReject,
+  stageAiResponse,
+  type PendingProposal,
+} from '../../lib/ai/proposal'
+import { AiEditError } from '../../lib/ai/protocol'
 import type { AiChatMessage, ElementSelection } from '../../lib/ai/types'
 import { AiChatPanel } from './AiChatPanel'
 import './AiPreviewStage.css'
 
-type Phase = 'idle' | 'thinking' | 'applying' | 'error'
+type Phase = 'idle' | 'thinking' | 'applying' | 'pending' | 'error'
 type ToastKind = 'info' | 'success' | 'error'
 
 interface Session {
@@ -38,17 +47,31 @@ interface HoverState {
 interface AiPreviewStageProps {
   source: string
   selectMode: boolean
+  pageChat: boolean
   onApply: (next: string) => void
+  onPreview: (next: string | null) => void
   onExitSelectMode: () => void
+  onExitPageChat: () => void
   onNotify: (kind: ToastKind, text: string) => void
   children: ReactNode
 }
 
-function OverlayBox({ box, tag, selected }: { box: Box; tag: string; selected?: boolean }) {
+function OverlayBox({
+  box,
+  tag,
+  selected,
+  pending,
+}: {
+  box: Box
+  tag: string
+  selected?: boolean
+  pending?: boolean
+}) {
   const tagInside = box.top < 18
+  const tone = pending ? 'ai-box--pending' : selected ? 'ai-box--selected' : 'ai-box--hover'
   return (
     <div
-      className={`ai-box ${selected ? 'ai-box--selected' : 'ai-box--hover'} ${tagInside ? 'ai-box--tag-inside' : ''}`}
+      className={`ai-box ${tone} ${tagInside ? 'ai-box--tag-inside' : ''}`}
       style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
       aria-hidden="true"
     >
@@ -60,8 +83,11 @@ function OverlayBox({ box, tag, selected }: { box: Box; tag: string; selected?: 
 export function AiPreviewStage({
   source,
   selectMode,
+  pageChat,
   onApply,
+  onPreview,
   onExitSelectMode,
+  onExitPageChat,
   onNotify,
   children,
 }: AiPreviewStageProps) {
@@ -72,11 +98,18 @@ export function AiPreviewStage({
   const hoverElRef = useRef<HTMLElement | null>(null)
   const sessionRef = useRef<Session | null>(null)
   const sourceRef = useRef(source)
+  const pendingRef = useRef<PendingProposal | null>(null)
+  const onPreviewRef = useRef(onPreview)
+  const onApplyRef = useRef(onApply)
+  const onNotifyRef = useRef(onNotify)
+  const acceptRef = useRef<() => void>(() => {})
+  const rejectRef = useRef<() => void>(() => {})
   const requestGen = useRef(0)
   const busyRef = useRef(false)
   const phaseTimer = useRef<number | null>(null)
 
   const [session, setSession] = useState<Session | null>(null)
+  const [pending, setPending] = useState<PendingProposal | null>(null)
   const [hover, setHover] = useState<HoverState | null>(null)
   const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null)
   const [selectBox, setSelectBox] = useState<Box | null>(null)
@@ -86,12 +119,15 @@ export function AiPreviewStage({
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [flash, setFlash] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
   const [seenSelectMode, setSeenSelectMode] = useState(selectMode)
+  const [seenPageChat, setSeenPageChat] = useState(pageChat)
 
-  if (selectMode !== seenSelectMode) {
+  if (selectMode !== seenSelectMode || pageChat !== seenPageChat) {
+    const wasPageChat = seenPageChat
     setSeenSelectMode(selectMode)
-    if (!selectMode) {
-      setSession(null)
+    setSeenPageChat(pageChat)
+    if (pageChat) {
       setHover(null)
       setSelectedEl(null)
       setSelectBox(null)
@@ -99,6 +135,24 @@ export function AiPreviewStage({
       setError(null)
       setDraft('')
       setFlash(false)
+      setRejecting(false)
+      setPending(null)
+      setSession((existing) =>
+        existing?.selection.tag === 'page'
+          ? existing
+          : { id: (existing?.id ?? 0) + 1, selection: pageSelection(), messages: [] },
+      )
+    } else if (!selectMode || wasPageChat) {
+      setSession(null)
+      setPending(null)
+      setHover(null)
+      setSelectedEl(null)
+      setSelectBox(null)
+      setPhase('idle')
+      setError(null)
+      setDraft('')
+      setFlash(false)
+      setRejecting(false)
     }
   }
 
@@ -125,30 +179,66 @@ export function AiPreviewStage({
   useEffect(() => {
     sessionRef.current = session
     sourceRef.current = source
+    pendingRef.current = pending
     selectedElRef.current = selectedEl
     hoverElRef.current = hover?.el ?? null
-  }, [session, source, selectedEl, hover])
+    onPreviewRef.current = onPreview
+    onApplyRef.current = onApply
+    onNotifyRef.current = onNotify
+  }, [session, source, pending, selectedEl, hover, onPreview, onApply, onNotify])
+
+  const chatMode = pageChat ? 'page' : selectMode ? 'select' : 'off'
+  const chatModeRef = useRef(chatMode)
 
   useEffect(() => {
-    if (selectMode) return
+    const previous = chatModeRef.current
+    chatModeRef.current = chatMode
+    if (previous === chatMode) return
     requestGen.current += 1
     busyRef.current = false
+    pendingRef.current = null
     clearPhaseTimer()
     selectedElRef.current = null
     hoverElRef.current = null
-  }, [selectMode, clearPhaseTimer])
+    onPreviewRef.current(null)
+  }, [chatMode, clearPhaseTimer])
 
   useEffect(() => {
-    if (!selectMode) return
+    const current = pendingRef.current
+    if (!current || source === current.base) return
+    pendingRef.current = null
+    setPending(null)
+    setPhase('idle')
+    onPreviewRef.current(null)
+    onNotifyRef.current('info', 'Discarded the AI preview because the page source changed.')
+  }, [source])
+
+  useEffect(() => {
+    if (!selectMode && !pageChat) return
     const onKey = (event: KeyboardEvent) => {
+      const acceptKey = (event.metaKey || event.ctrlKey) && event.key === 'Enter'
+      if (acceptKey) {
+        if (!pendingRef.current || busyRef.current) return
+        event.preventDefault()
+        event.stopPropagation()
+        acceptRef.current()
+        return
+      }
       if (event.key !== 'Escape') return
       event.preventDefault()
       event.stopPropagation()
-      onExitSelectMode()
+      if (pendingRef.current) {
+        rejectRef.current()
+        return
+      }
+      requestGen.current += 1
+      busyRef.current = false
+      if (pageChat) onExitPageChat()
+      else onExitSelectMode()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [selectMode, onExitSelectMode])
+  }, [selectMode, pageChat, onExitSelectMode, onExitPageChat])
 
   useEffect(() => {
     return () => clearPhaseTimer()
@@ -206,9 +296,22 @@ export function AiPreviewStage({
         existing.selection.label === next.label
       return same ? existing : { ...existing, selection: next }
     })
-  }, [source, selectMode, session?.id, measure])
+  }, [source, selectMode, session?.id, measure, pending])
 
   useLayoutEffect(() => {
+    if (!pageChat || !session) return
+    const shell = shellRef.current
+    const panel = panelRef.current
+    if (!shell || !panel) return
+    const cap = Math.min(420, Math.max(220, shell.clientHeight - 16))
+    setPanelMax((prev) => (prev === cap ? prev : cap))
+    const margin = 12
+    const left = Math.max(margin, shell.clientWidth - panel.offsetWidth - margin)
+    setPanelPos((prev) => (prev.top === margin && prev.left === left ? prev : { top: margin, left }))
+  }, [pageChat, session, phase, error, panelMax, pending])
+
+  useLayoutEffect(() => {
+    if (pageChat) return
     const shell = shellRef.current
     const panel = panelRef.current
     if (!shell || !panel || !selectBox || !session) return
@@ -220,10 +323,76 @@ export function AiPreviewStage({
       { width: panel.offsetWidth, height: panel.offsetHeight },
     )
     setPanelPos((prev) => (prev.top === next.top && prev.left === next.left ? prev : next))
-  }, [selectBox, session, phase, error, panelMax])
+  }, [pageChat, selectBox, session, phase, error, panelMax])
+
+  const rememberProposal = (next: PendingProposal | null) => {
+    pendingRef.current = next
+    setPending(next)
+  }
+
+  const showPreview = (next: string | null) => {
+    onPreviewRef.current(next)
+  }
+
+  const playReject = () => {
+    clearPhaseTimer()
+    setRejecting(true)
+    setFlash(false)
+    phaseTimer.current = window.setTimeout(() => {
+      setRejecting(false)
+      phaseTimer.current = null
+    }, 420)
+  }
+
+  const accept = () => {
+    const current = pendingRef.current
+    if (!current || busyRef.current) return
+    const committed = sourceRef.current
+    const next = sourceAfterAccept(committed, current)
+    rememberProposal(null)
+    showPreview(null)
+    setPhase('idle')
+    setError(null)
+    if (next === current.proposed && committed === current.base) {
+      onApplyRef.current(next)
+      onNotifyRef.current('success', 'Change kept')
+      clearPhaseTimer()
+      setFlash(true)
+      setRejecting(false)
+      phaseTimer.current = window.setTimeout(() => {
+        setFlash(false)
+        phaseTimer.current = null
+      }, 900)
+      return
+    }
+    onNotifyRef.current('info', 'The page changed, so that preview was not kept.')
+  }
+
+  const reject = () => {
+    const current = pendingRef.current
+    if (!current || busyRef.current) return
+    const restored = sourceAfterReject(sourceRef.current, current)
+    rememberProposal(null)
+    showPreview(null)
+    if (sourceRef.current !== restored) onApplyRef.current(restored)
+    setPhase('idle')
+    setError(null)
+    playReject()
+    onNotifyRef.current('info', 'Change discarded')
+  }
+
+  useEffect(() => {
+    acceptRef.current = accept
+    rejectRef.current = reject
+  })
 
   const closePanel = () => {
+    requestGen.current += 1
+    busyRef.current = false
+    const hadPending = pendingRef.current !== null
+    if (hadPending) reject()
     clearPhaseTimer()
+    setRejecting(false)
     setSession(null)
     setSelectBox(null)
     setSelectedEl(null)
@@ -232,6 +401,7 @@ export function AiPreviewStage({
     setError(null)
     setDraft('')
     setFlash(false)
+    if (pageChat) onExitPageChat()
   }
 
   const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
@@ -274,7 +444,9 @@ export function AiPreviewStage({
     if (!same) {
       requestGen.current += 1
       busyRef.current = false
+      if (pendingRef.current) reject()
       clearPhaseTimer()
+      setRejecting(false)
       setPhase('idle')
       setError(null)
       setDraft('')
@@ -304,7 +476,7 @@ export function AiPreviewStage({
 
   const send = async () => {
     const current = sessionRef.current
-    if (!current || busyRef.current) return
+    if (!current || busyRef.current || sendBlockedByProposal(pendingRef.current)) return
     const instruction = draft.trim()
     if (!instruction) return
 
@@ -335,17 +507,16 @@ export function AiPreviewStage({
         return
       }
 
-      const applied = nextSourceFromAiResponse(sourceAtSend, response)
-      if (!applied.ok) {
+      const staged = stageAiResponse(sourceAtSend, response)
+      if (staged.status === 'invalid') {
         setSession((existing) => (existing && existing.id === sessionId ? { ...existing, messages: history } : existing))
         setDraft((existing) => (existing.trim() ? existing : instruction))
         setPhase('error')
-        setError(applied.error)
-        onNotify('error', applied.error)
+        setError(staged.error)
+        onNotify('error', staged.error)
         return
       }
 
-      if (applied.changed) onApply(applied.source)
       setSession((existing) => {
         if (!existing || existing.id !== sessionId) return existing
         return {
@@ -353,11 +524,18 @@ export function AiPreviewStage({
           messages: [...optimistic, { role: 'assistant', content: response.message }],
         }
       })
-      setPhase('applying')
-      setFlash(true)
-      if (applied.changed) onNotify('success', 'Preview updated')
-      phaseTimer.current = window.setTimeout(() => {
+
+      if (staged.status === 'unchanged') {
         setPhase('idle')
+        return
+      }
+
+      rememberProposal(staged.proposal)
+      showPreview(previewDocument(sourceAtSend, staged.proposal))
+      setPhase('pending')
+      setRejecting(false)
+      setFlash(true)
+      phaseTimer.current = window.setTimeout(() => {
         setFlash(false)
         phaseTimer.current = null
       }, 900)
@@ -376,9 +554,11 @@ export function AiPreviewStage({
 
   return (
     <div
-      className={`ai-stage ${flash ? 'ai-stage--flash' : ''}`}
+      className={`ai-stage ${flash ? 'ai-stage--flash' : ''} ${pending ? 'ai-stage--pending' : ''} ${rejecting ? 'ai-stage--reject' : ''}`}
       ref={shellRef}
       data-selecting={selectMode ? 'true' : 'false'}
+      data-page-chat={pageChat ? 'true' : 'false'}
+      data-proposal={pending ? 'pending' : 'none'}
     >
       <div
         className="ai-stage__scroll"
@@ -391,16 +571,18 @@ export function AiPreviewStage({
       >
         {children}
       </div>
-      {selectMode ? (
+      {selectMode || pageChat ? (
         <div className="ai-stage__overlay">
-          {hover && hover.el !== selectedEl ? (
+          {selectMode && hover && hover.el !== selectedEl ? (
             <OverlayBox box={hover.box} tag={hover.tag} />
           ) : null}
-          {session && selectBox ? <OverlayBox box={selectBox} tag={session.selection.tag} selected /> : null}
-          {session && selectBox ? (
+          {selectMode && session && selectBox ? (
+            <OverlayBox box={selectBox} tag={session.selection.tag} selected pending={pending !== null} />
+          ) : null}
+          {(pageChat && session) || (selectMode && session && selectBox) ? (
             <div
               ref={panelRef}
-              className="ai-chat-anchor"
+              className={`ai-chat-anchor ${pageChat ? 'ai-chat-anchor--page' : ''}`}
               style={
                 {
                   top: panelPos.top,
@@ -414,24 +596,30 @@ export function AiPreviewStage({
                 sessionId={session.id}
                 messages={session.messages}
                 phase={phase}
+                pending={pending !== null}
+                scope={pageChat ? 'page' : 'section'}
                 error={error}
                 draft={draft}
                 onDraft={setDraft}
                 onSend={() => {
                   void send()
                 }}
+                onAccept={accept}
+                onReject={reject}
                 onClose={closePanel}
               />
             </div>
           ) : null}
-          {flash ? <div className="ai-apply-flash" /> : null}
           {!session ? (
             <p className="ai-sr">
-              Select mode is on. Click an element in the preview to describe a change. Press Escape to exit.
+              {pageChat
+                ? 'Page editing is open. Describe a change for the whole page. Press Escape to close.'
+                : 'Select mode is on. Click an element in the preview to describe a change. Press Escape to exit.'}
             </p>
           ) : null}
         </div>
       ) : null}
+      {flash ? <div className="ai-apply-flash" /> : null}
     </div>
   )
 }

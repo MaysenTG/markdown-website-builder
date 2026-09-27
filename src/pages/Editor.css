@@ -61,6 +61,27 @@
   cursor: not-allowed;
 }
 
+.editor__btn--ai {
+  background: #312e81;
+  border-color: #818cf8;
+  color: #eef2ff;
+}
+
+.editor__btn--ai:hover {
+  background: #3730a3;
+}
+
+.editor__btn--ai[aria-pressed='true'] {
+  background: #4f46e5;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.28);
+}
+
+.editor__btn--ai[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .editor__btn--select[aria-pressed='true'] {
   background: #312e81;
   border-color: #818cf8;
@@ -205,6 +226,19 @@
   background: #38bdf8;
   box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18);
   animation: ai-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.editor__select-hint--pending {
+  color: #fcd34d;
+}
+
+.editor__select-hint--pending .editor__select-hint-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.22);
+}
+
+.editor__panel--preview.is-ai-pending {
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.45);
 }
 
 @media (max-width: 600px) {

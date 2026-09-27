@@ -1,6 +1,12 @@
 /** Keep in sync with worker/src/limits.ts */
 export const LIMITS = {
   maxDocumentChars: 48_000,
+  /**
+   * User instructions in the AI chat, measured as JavaScript string length.
+   * Assistant replies in the transcript use maxResponseMessageChars instead.
+   */
+  maxUserMessageChars: 100,
+  /** Safety cap for transcript lines that are not the user instruction. */
   maxMessageChars: 4_000,
   maxMessages: 16,
   maxExcerptChars: 500,
