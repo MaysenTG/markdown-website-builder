@@ -2,7 +2,7 @@ import { LIMITS } from './limits'
 import type { ChatMessage, EditRequest, ElementSelection } from './types'
 
 export const DEFAULT_ALLOWED_ORIGINS = [
-  'https://maysentg.github.io',
+  'https://*.pages.dev',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:4173',
@@ -17,9 +17,30 @@ export function parseAllowedOrigins(raw: string | undefined): string[] {
   return parsed.length > 0 ? parsed : DEFAULT_ALLOWED_ORIGINS
 }
 
+/** Exact origins, or a single leading-label wildcard such as https://*.pages.dev. */
+export function originMatches(origin: string, pattern: string): boolean {
+  if (pattern === origin) return true
+  const star = pattern.indexOf('*')
+  if (star === -1 || pattern.indexOf('*', star + 1) !== -1) return false
+
+  let patternUrl: URL
+  let originUrl: URL
+  try {
+    patternUrl = new URL(pattern.replace('*', 'wildcard'))
+    originUrl = new URL(origin)
+  } catch {
+    return false
+  }
+  if (originUrl.protocol !== patternUrl.protocol || originUrl.port !== patternUrl.port) return false
+  if (!patternUrl.hostname.startsWith('wildcard.')) return false
+
+  const suffix = patternUrl.hostname.slice('wildcard.'.length)
+  return suffix.length > 0 && originUrl.hostname.endsWith(`.${suffix}`)
+}
+
 export function matchAllowedOrigin(origin: string | null, allowed: string[]): string | null {
   if (!origin) return null
-  return allowed.includes(origin) ? origin : null
+  return allowed.some((pattern) => originMatches(origin, pattern)) ? origin : null
 }
 
 export function applyCors(headers: Headers, allowOrigin: string | null): void {

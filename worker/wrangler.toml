@@ -12,8 +12,9 @@ compatibility_date = "2026-09-27"
 OPENAI_MODEL = "gpt-4o-mini"
 
 # Optional. Comma-separated browser Origins. If you set this, it replaces the
-# defaults (GitHub Pages + local Vite). Include every origin you actually use.
-# ALLOWED_ORIGINS = "https://maysentg.github.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+# defaults (every https://*.pages.dev host + local Vite). Include every origin
+# you actually use, including a custom domain.
+# ALLOWED_ORIGINS = "https://*.pages.dev,https://example.com,http://localhost:5173,http://127.0.0.1:5173"
 
 # Optional. Another API root, without a trailing path. Default is OpenAI.
 # OPENAI_BASE_URL = "https://api.openai.com/v1"

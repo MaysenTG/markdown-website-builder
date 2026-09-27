@@ -1,5 +1,5 @@
-# Deploys the AI proxy Worker. Skips cleanly when Cloudflare credentials are absent
-# so the static Pages site can keep shipping without a Cloudflare account.
+# Deploys the AI proxy Worker. Skips when Cloudflare credentials are absent.
+# The same CLOUDFLARE_API_TOKEN can deploy Pages if it also has Pages edit permission.
 name: Deploy AI Worker
 
 on:

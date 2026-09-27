@@ -8,7 +8,7 @@ import { LIMITS as workerLimits } from '../worker/src/limits'
 import { handleFetch } from '../worker/src/index'
 import { buildOpenAiCall, completeEdit, parseModelContent } from '../worker/src/openai'
 import { SYSTEM_PROMPT } from '../worker/src/prompt'
-import { checkRateLimit, safeEqual, validateEditRequest } from '../worker/src/policy'
+import { checkRateLimit, matchAllowedOrigin, parseAllowedOrigins, safeEqual, validateEditRequest } from '../worker/src/policy'
 import type { Env } from '../worker/src/types'
 
 const selection = {
@@ -165,6 +165,25 @@ describe('panel placement', () => {
   })
 })
 
+describe('worker origins', () => {
+  it('allows Cloudflare Pages hosts and rejects the retired GitHub Pages origin', () => {
+    const allowed = parseAllowedOrigins(undefined)
+    expect(matchAllowedOrigin('https://markdown-website-builder.pages.dev', allowed)).toBe(
+      'https://markdown-website-builder.pages.dev',
+    )
+    expect(matchAllowedOrigin('https://abc123.markdown-website-builder.pages.dev', allowed)).toBe(
+      'https://abc123.markdown-website-builder.pages.dev',
+    )
+    expect(matchAllowedOrigin('https://maysentg.github.io', allowed)).toBeNull()
+    expect(matchAllowedOrigin('https://evilpages.dev', allowed)).toBeNull()
+    expect(matchAllowedOrigin('http://markdown-website-builder.pages.dev', allowed)).toBeNull()
+    expect(matchAllowedOrigin('https://pages.dev.evil.example', allowed)).toBeNull()
+
+    const custom = parseAllowedOrigins('https://notes.example.com,https://*.pages.dev')
+    expect(matchAllowedOrigin('https://notes.example.com', custom)).toBe('https://notes.example.com')
+  })
+})
+
 describe('worker contract', () => {
   it('keeps client and worker limits aligned', () => {
     expect(clientLimits).toEqual(workerLimits)
@@ -255,7 +274,7 @@ describe('worker contract', () => {
       new Request('https://worker.test/', {
         method: 'POST',
         headers: {
-          Origin: 'https://maysentg.github.io',
+          Origin: 'https://abc123.markdown-website-builder.pages.dev',
           'Content-Type': 'application/json',
           'X-AI-Gate': 'gate-token',
           'CF-Connecting-IP': '203.0.113.5',
@@ -266,6 +285,9 @@ describe('worker contract', () => {
       { buckets, complete, now: () => 1_000 },
     )
     expect(ok.status).toBe(200)
+    expect(ok.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://abc123.markdown-website-builder.pages.dev',
+    )
     expect(await ok.json()).toEqual({ document: '# Updated\n', message: 'Updated the page.' })
     expect(complete).toHaveBeenCalledTimes(1)
     const forwarded = complete.mock.calls[0]?.[1]

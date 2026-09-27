@@ -1,7 +1,7 @@
 {
   "name": "markdown-website-builder",
   "private": true,
-  "homepage": "https://maysentg.github.io/markdown-website-builder/",
+  "homepage": "https://markdown-website-builder.pages.dev/",
   "version": "0.0.0",
   "type": "module",
   "scripts": {

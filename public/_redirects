@@ -1,0 +1,2 @@
+# Cloudflare Pages SPA fallback. Existing files (assets, favicon) are served first.
+/* /index.html 200
